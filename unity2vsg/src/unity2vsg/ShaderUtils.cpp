@@ -35,7 +35,7 @@ std::vector<std::string> createPSCDefineStrings(const uint32_t& shaderModeMask, 
     if (hastanget) defines.push_back("VSG_TANGENT");
     if (hascolor) defines.push_back("VSG_COLOR");
     if (hastex0) defines.push_back("VSG_TEXCOORD0");
-    if (hastex1) defines.push_back("VSG_TEXCOORD0");
+    if (hastex1) defines.push_back("VSG_TEXCOORD1");
 
     // shading modes/maps
     if (hasnormal && (shaderModeMask & LIGHTING)) defines.push_back("VSG_LIGHTING");
