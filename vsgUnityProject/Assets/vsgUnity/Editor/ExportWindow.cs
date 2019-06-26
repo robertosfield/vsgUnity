@@ -1,4 +1,16 @@
-﻿using System.IO;
+﻿/* <editor-fold desc="MIT License">
+
+Copyright(c) 2019 Thomas Hogarth
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+</editor-fold> */
+
+using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -28,17 +40,28 @@ namespace vsgUnity.Editor
         string _feedbackText = "Select an export object.";
         bool _isExporting = false;
 
+        // test code
+        [MenuItem("Window/VulkanSceneGraph/Run Snippet")]
+        static void RunSnippet()
+        {
+            //ShaderMappingIO.CreateTemplateFileForShader<ShaderMapping>(Shader.Find("Standard"));
+            ShaderMappingIO.CreateTemplateFileForShader(Shader.Find("CTS/CTS Terrain Shader Advanced Trial"));
+        }
+
         // open window
         [MenuItem("Window/VulkanSceneGraph/Exporter")]
-        static void
-        Init()
-        {
+        static void Init()
+        {  
             // Get existing open window or if none, make a new one:
             ExportWindow window = (ExportWindow) EditorWindow.GetWindow(typeof (ExportWindow), true, "vsgUnity");
 
             if(!_hasInited)
             {
                 _settings.autoAddCullNodes = false;
+                _settings.zeroRootTransform = false;
+
+                _settings.standardTerrainShaderMappingPath = PathForShaderAsset("standardTerrain-ShaderMapping");
+
                 _hasInited = true;
             }
 
@@ -55,6 +78,15 @@ namespace vsgUnity.Editor
             PopulatePreviewCamerasList();
 
             window.Show();
+        }
+
+        static string PathForShaderAsset(string shaderFileName)
+        {
+            string[] shaderGUID = AssetDatabase.FindAssets(shaderFileName);
+            if (shaderGUID == null || shaderGUID.Length == 0) return string.Empty;
+            string datapath = Application.dataPath;
+            datapath = datapath.Remove(datapath.Length - ("Assets").Length);
+            return Path.Combine(datapath, AssetDatabase.GUIDToAssetPath(shaderGUID[0]));
         }
 
         void ExportTarget()
@@ -107,7 +139,7 @@ namespace vsgUnity.Editor
             EditorGUILayout.BeginHorizontal();
             {
                 EditorGUILayout.PrefixLabel("Folder");
-                GUILayout.Label(_exportDirectory);
+                GUILayout.Label(_exportDirectory, GUILayout.MaxHeight(100));
 
                 if (GUILayout.Button("...", GUILayout.MaxWidth(GUI.skin.button.lineHeight * 2.0f)))
                 {
@@ -127,6 +159,9 @@ namespace vsgUnity.Editor
             _binaryExport = EditorGUILayout.Toggle("Binary", _binaryExport);
 
             _settings.autoAddCullNodes = EditorGUILayout.Toggle("Add Cull Nodes", _settings.autoAddCullNodes);
+            _settings.zeroRootTransform = EditorGUILayout.Toggle("Zero Root Transform", _settings.zeroRootTransform);
+
+            EditorGUILayout.LabelField(_settings.standardTerrainShaderMappingPath);
 
             EditorGUILayout.Separator();
 
@@ -205,8 +240,9 @@ namespace vsgUnity.Editor
                 foreach(Material m in sharedMaterials)
                 {
                     if (m == null) continue;
-                    Dictionary<string, Texture>textures = NativeUtils.GetValidTexturesForMaterial(m);
-                    allTextures.AddRange(textures.Values);
+                    //
+                    Texture[] textures = MaterialConverter.GetValidTexturesForMaterial(m);
+                    allTextures.AddRange(textures);
                 }
             }
 
@@ -223,10 +259,10 @@ namespace vsgUnity.Editor
 
             foreach(Texture tex in allTextures)
             {
-                NativeUtils.TextureSupportIssues issues = NativeUtils.GetSupportIssuesForTexture(tex);
-                if (issues != NativeUtils.TextureSupportIssues.None && (issues & NativeUtils.TextureSupportIssues.Dimensions) != NativeUtils.TextureSupportIssues.Dimensions)
+                TextureConverter.TextureSupportIssues issues = TextureConverter.GetSupportIssuesForTexture(tex);
+                if (issues != TextureConverter.TextureSupportIssues.None && (issues & TextureConverter.TextureSupportIssues.Dimensions) != TextureConverter.TextureSupportIssues.Dimensions)
                 {
-                    report += NativeUtils.GetTextureSupportReport(issues, tex);
+                    report += TextureConverter.GetTextureSupportReport(issues, tex);
 
                     EditorUtility.DisplayProgressBar("Fixing Textures", "Processing " + tex.name, (float)((float) progress / (float) allTextures.Count));
 
@@ -234,11 +270,11 @@ namespace vsgUnity.Editor
                     TextureImporter importer = (TextureImporter) TextureImporter.GetAtPath(path);
                     if (importer == null) continue;
 
-                    if ((issues & NativeUtils.TextureSupportIssues.ReadWrite) == NativeUtils.TextureSupportIssues.ReadWrite)
+                    if ((issues & TextureConverter.TextureSupportIssues.ReadWrite) == TextureConverter.TextureSupportIssues.ReadWrite)
                     {
                         importer.isReadable = true;
                     }
-                    if ((issues & NativeUtils.TextureSupportIssues.Format) == NativeUtils.TextureSupportIssues.Format)
+                    if ((issues & TextureConverter.TextureSupportIssues.Format) == TextureConverter.TextureSupportIssues.Format)
                     {
                         importer.textureCompression = TextureImporterCompression.Uncompressed;
                         TextureImporterPlatformSettings platformSettings = importer.GetPlatformTextureSettings("Standalone");
@@ -246,12 +282,12 @@ namespace vsgUnity.Editor
                         platformSettings.format = TextureImporterFormat.RGBA32;
                         importer.SetPlatformTextureSettings(platformSettings);
                     }
-                    if ((issues & NativeUtils.TextureSupportIssues.Dimensions) == NativeUtils.TextureSupportIssues.Dimensions)
+                    if ((issues & TextureConverter.TextureSupportIssues.Dimensions) == TextureConverter.TextureSupportIssues.Dimensions)
                     {
                     }
                     importer.SaveAndReimport();
                 }
-                else if ((issues & NativeUtils.TextureSupportIssues.Dimensions) == NativeUtils.TextureSupportIssues.Dimensions)
+                else if ((issues & TextureConverter.TextureSupportIssues.Dimensions) == TextureConverter.TextureSupportIssues.Dimensions)
                 {
                     Debug.Log("Texture '" + tex.name + "' is using an unspported dimension '" + tex.dimension.ToString() + "' an cannot be converted.");
                 }

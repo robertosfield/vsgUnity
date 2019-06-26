@@ -20,20 +20,22 @@ using namespace unity2vsg;
 
 // create defines string based of shader mask
 
-std::vector<std::string> createPSCDefineStrings(const uint32_t& shaderModeMask, const uint32_t& geometryAttrbutes)
+std::vector<std::string> createPSCDefineStrings(const uint32_t& shaderModeMask, const uint32_t& geometryAttrbutes, const std::vector<std::string>& customDefines)
 {
     bool hasnormal = geometryAttrbutes & NORMAL;
     bool hastanget = geometryAttrbutes & TANGENT;
     bool hascolor = geometryAttrbutes & COLOR;
     bool hastex0 = geometryAttrbutes & TEXCOORD0;
+    bool hastex1 = geometryAttrbutes & TEXCOORD1;
 
     std::vector<std::string> defines;
 
     // vertx inputs
     if (hasnormal) defines.push_back("VSG_NORMAL");
+    if (hastanget) defines.push_back("VSG_TANGENT");
     if (hascolor) defines.push_back("VSG_COLOR");
     if (hastex0) defines.push_back("VSG_TEXCOORD0");
-    if (hastanget) defines.push_back("VSG_TANGENT");
+    if (hastex1) defines.push_back("VSG_TEXCOORD0");
 
     // shading modes/maps
     if (hasnormal && (shaderModeMask & LIGHTING)) defines.push_back("VSG_LIGHTING");
@@ -47,6 +49,11 @@ std::vector<std::string> createPSCDefineStrings(const uint32_t& shaderModeMask, 
     if (hastex0 && (shaderModeMask & SPECULAR_MAP)) defines.push_back("VSG_SPECULAR_MAP");
 
     if (shaderModeMask & BILLBOARD) defines.push_back("VSG_BILLBOARD");
+
+    if (customDefines.size() > 0)
+    {
+        std::copy(customDefines.begin(), customDefines.end(), std::back_inserter(defines));
+    }
 
     return defines;
 }
@@ -185,7 +192,7 @@ std::string debugFormatShaderSource(const std::string& source)
 }
 
 // read a glsl file and inject defines based on shadermodemask and geometryatts
-std::string unity2vsg::readGLSLShader(const std::string& filename, const uint32_t& shaderModeMask, const uint32_t& geometryAttrbutes)
+std::string unity2vsg::readGLSLShader(const std::string& filename, const uint32_t& shaderModeMask, const uint32_t& geometryAttrbutes, const std::vector<std::string>& customDefines)
 {
     std::string sourceBuffer;
     if (!vsg::readFile(sourceBuffer, filename))
@@ -194,14 +201,14 @@ std::string unity2vsg::readGLSLShader(const std::string& filename, const uint32_
         return std::string();
     }
 
-    auto defines = createPSCDefineStrings(shaderModeMask, geometryAttrbutes);
+    auto defines = createPSCDefineStrings(shaderModeMask, geometryAttrbutes, customDefines);
     std::string formatedSource = processGLSLShaderSource(sourceBuffer, defines);
     return formatedSource;
 }
 
 // create an fbx vertex shader
 
-std::string unity2vsg::createFbxVertexSource(const uint32_t& shaderModeMask, const uint32_t& geometryAttrbutes)
+std::string unity2vsg::createFbxVertexSource(const uint32_t& shaderModeMask, const uint32_t& geometryAttrbutes, const std::vector<std::string>& customDefines)
 {
     std::string source =
         "#version 450\n"
@@ -288,7 +295,7 @@ std::string unity2vsg::createFbxVertexSource(const uint32_t& shaderModeMask, con
         "#endif\n"
         "}\n";
 
-    auto defines = createPSCDefineStrings(shaderModeMask, geometryAttrbutes);
+    auto defines = createPSCDefineStrings(shaderModeMask, geometryAttrbutes, customDefines);
     std::string formatedSource = processGLSLShaderSource(source, defines);
 
     return formatedSource;
@@ -296,7 +303,7 @@ std::string unity2vsg::createFbxVertexSource(const uint32_t& shaderModeMask, con
 
 // create an fbx fragment shader
 
-std::string unity2vsg::createFbxFragmentSource(const uint32_t& shaderModeMask, const uint32_t& geometryAttrbutes)
+std::string unity2vsg::createFbxFragmentSource(const uint32_t& shaderModeMask, const uint32_t& geometryAttrbutes, const std::vector<std::string>& customDefines)
 {
     std::string source =
         "#version 450\n"
@@ -401,7 +408,7 @@ std::string unity2vsg::createFbxFragmentSource(const uint32_t& shaderModeMask, c
         "#endif\n"
         "}\n";
 
-    auto defines = createPSCDefineStrings(shaderModeMask, geometryAttrbutes);
+    auto defines = createPSCDefineStrings(shaderModeMask, geometryAttrbutes, customDefines);
     std::string formatedSource = processGLSLShaderSource(source, defines);
 
     return formatedSource;
@@ -418,10 +425,10 @@ ShaderCompiler::~ShaderCompiler()
     glslang::FinalizeProcess();
 }
 
-bool ShaderCompiler::compile(vsg::ShaderModules& shaders)
+bool ShaderCompiler::compile(vsg::ShaderStages& shaders)
 {
-    auto getFriendlyNameForShader = [](const vsg::ref_ptr<vsg::ShaderModule>& vsg_shader) {
-        switch (vsg_shader->stage())
+    auto getFriendlyNameForShader = [](const vsg::ref_ptr<vsg::ShaderStage>& vsg_shader) {
+        switch (vsg_shader->getShaderStageFlagBits())
         {
         case (VK_SHADER_STAGE_VERTEX_BIT): return "Vertex Shader";
         case (VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT): return "Tessellation Control Shader";
@@ -434,7 +441,7 @@ bool ShaderCompiler::compile(vsg::ShaderModules& shaders)
         return "";
     };
 
-    using StageShaderMap = std::map<EShLanguage, vsg::ref_ptr<vsg::ShaderModule>>;
+    using StageShaderMap = std::map<EShLanguage, vsg::ref_ptr<vsg::ShaderStage>>;
     using TShaders = std::list<std::unique_ptr<glslang::TShader>>;
     TShaders tshaders;
 
@@ -446,7 +453,7 @@ bool ShaderCompiler::compile(vsg::ShaderModules& shaders)
     for (auto& vsg_shader : shaders)
     {
         EShLanguage envStage = EShLangCount;
-        switch (vsg_shader->stage())
+        switch (vsg_shader->getShaderStageFlagBits())
         {
         case (VK_SHADER_STAGE_VERTEX_BIT): envStage = EShLangVertex; break;
         case (VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT): envStage = EShLangTessControl; break;
@@ -476,7 +483,7 @@ bool ShaderCompiler::compile(vsg::ShaderModules& shaders)
         shader->setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
         shader->setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
 
-        const char* str = vsg_shader->source().c_str();
+        const char* str = vsg_shader->getShaderModule()->source().c_str();
         shader->setStrings(&str, 1);
 
         int defaultVersion = 110; // 110 desktop, 100 non desktop
@@ -496,7 +503,7 @@ bool ShaderCompiler::compile(vsg::ShaderModules& shaders)
             INFO_OUTPUT << std::endl
                         << "----  " << getFriendlyNameForShader(vsg_shader) << "  ----" << std::endl
                         << std::endl;
-            INFO_OUTPUT << debugFormatShaderSource(vsg_shader->source()) << std::endl;
+            INFO_OUTPUT << debugFormatShaderSource(vsg_shader->getShaderModule()->source()) << std::endl;
             INFO_OUTPUT << "Warning: GLSL source failed to parse." << std::endl;
             INFO_OUTPUT << "glslang info log: " << std::endl
                         << shader->getInfoLog();
@@ -524,7 +531,7 @@ bool ShaderCompiler::compile(vsg::ShaderModules& shaders)
             INFO_OUTPUT << std::endl
                         << getFriendlyNameForShader(vsg_shader) << ":" << std::endl
                         << std::endl;
-            INFO_OUTPUT << debugFormatShaderSource(vsg_shader->source()) << std::endl;
+            INFO_OUTPUT << debugFormatShaderSource(vsg_shader->getShaderModule()->source()) << std::endl;
         }
 
         INFO_OUTPUT << "Warning: Program failed to link." << std::endl;
@@ -546,7 +553,7 @@ bool ShaderCompiler::compile(vsg::ShaderModules& shaders)
             std::string warningsErrors;
             spv::SpvBuildLogger logger;
             glslang::SpvOptions spvOptions;
-            glslang::GlslangToSpv(*(program->getIntermediate((EShLanguage)eshl_stage)), vsg_shader->spirv(), &logger, &spvOptions);
+            glslang::GlslangToSpv(*(program->getIntermediate((EShLanguage)eshl_stage)), vsg_shader->getShaderModule()->spirv(), &logger, &spvOptions);
         }
     }
 

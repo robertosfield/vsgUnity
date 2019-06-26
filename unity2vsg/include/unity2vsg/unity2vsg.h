@@ -17,8 +17,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 extern "C"
 {
-    UNITY2VSG_EXPORT void unity2vsg_ExportMesh(unity2vsg::MeshData mesh);
-
     UNITY2VSG_EXPORT void unity2vsg_BeginExport();
     UNITY2VSG_EXPORT void unity2vsg_EndExport(const char* saveFileName);
 
@@ -27,16 +25,17 @@ extern "C"
     UNITY2VSG_EXPORT void unity2vsg_AddTransformNode(unity2vsg::TransformData transform);
     UNITY2VSG_EXPORT void unity2vsg_AddCullNode(unity2vsg::CullData cull);
     UNITY2VSG_EXPORT void unity2vsg_AddCullGroupNode(unity2vsg::CullData cull);
+    UNITY2VSG_EXPORT void unity2vsg_AddLODNode(unity2vsg::CullData cull);
+    UNITY2VSG_EXPORT void unity2vsg_AddLODChild(unity2vsg::LODChildData lodChildData);
     UNITY2VSG_EXPORT void unity2vsg_AddStateGroupNode();
     UNITY2VSG_EXPORT void unity2vsg_AddCommandsNode();
-    UNITY2VSG_EXPORT void unity2vsg_AddVertexIndexDrawNode(unity2vsg::MeshData mesh);
-    UNITY2VSG_EXPORT void unity2vsg_AddGeometryNode(unity2vsg::MeshData mesh);
+    UNITY2VSG_EXPORT void unity2vsg_AddVertexIndexDrawNode(unity2vsg::VertexIndexDrawData mesh);
 
     // add meta data to nodes
     UNITY2VSG_EXPORT void unity2vsg_AddStringValue(const char* name, const char* value);
 
     // add command to commands node if one is current head or last stategroup node
-    UNITY2VSG_EXPORT void unity2vsg_AddBindGraphicsPipelineCommand(unity2vsg::PipelineData pipeline, uint32_t addToStateGroup);
+    UNITY2VSG_EXPORT int unity2vsg_AddBindGraphicsPipelineCommand(unity2vsg::PipelineData pipeline, uint32_t addToStateGroup);
     UNITY2VSG_EXPORT void unity2vsg_AddBindIndexBufferCommand(unity2vsg::IndexBufferData data);
     UNITY2VSG_EXPORT void unity2vsg_AddBindVertexBuffersCommand(unity2vsg::VertexBuffersData data);
     UNITY2VSG_EXPORT void unity2vsg_AddDrawIndexedCommand(unity2vsg::DrawIndexedData data);
@@ -44,7 +43,12 @@ extern "C"
     UNITY2VSG_EXPORT void unity2vsg_CreateBindDescriptorSetCommand(uint32_t addToStateGroup);
 
     // add descriptor to current descriptors list that will be bound by BindDescriptors call
-    UNITY2VSG_EXPORT void unity2vsg_AddTextureDescriptor(unity2vsg::TextureData texture);
+    UNITY2VSG_EXPORT void unity2vsg_AddDescriptorImage(unity2vsg::DescriptorImageData texture);
+
+    UNITY2VSG_EXPORT void unity2vsg_AddDescriptorBufferFloat(unity2vsg::DescriptorFloatUniformData data);
+    UNITY2VSG_EXPORT void unity2vsg_AddDescriptorBufferFloatArray(unity2vsg::DescriptorFloatArrayUniformData data);
+    UNITY2VSG_EXPORT void unity2vsg_AddDescriptorBufferVector(unity2vsg::DescriptorVectorUniformData data);
+    UNITY2VSG_EXPORT void unity2vsg_AddDescriptorBufferVectorArray(unity2vsg::DescriptorVectorArrayUniformData data);
 
     UNITY2VSG_EXPORT void unity2vsg_EndNode();
 
